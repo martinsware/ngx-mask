@@ -35,6 +35,9 @@ export class MaskService extends MaskApplierService {
     if (this.maskExpression === 'IP' && this.showMaskTyped) {
       this.maskIsShown = this.showMaskInInput(inputValue || '#');
     }
+    if (this.maskExpression === 'CPF_CNPJ' && this.showMaskTyped) {
+      this.maskIsShown = this.showMaskInInput(inputValue || '#');
+    }
     if (!inputValue && this.showMaskTyped) {
       this.formControlResult(this.prefix);
       return this.prefix + this.maskIsShown;
@@ -83,7 +86,10 @@ export class MaskService extends MaskApplierService {
     }
     const resLen: number = result.length;
     const prefNmask: string = this.prefix + this.maskIsShown;
-    return result + (this.maskExpression === 'IP' ? prefNmask : prefNmask.slice(resLen));
+    return (
+      result +
+      (this.maskExpression === 'IP' || this.maskExpression === 'CPF_CNPJ' ? prefNmask : prefNmask.slice(resLen))
+    );
   }
 
   public applyValueChanges(position: number = 0, cb: Function = () => {}): void {
@@ -157,7 +163,12 @@ export class MaskService extends MaskApplierService {
       }
     } else if (this.showMaskTyped) {
       if (inputVal) {
-        return this._checkForIp(inputVal);
+        if (this.maskExpression === 'IP') {
+          return this._checkForIp(inputVal);
+        }
+        if (this.maskExpression === 'CPF_CNPJ') {
+          return this._checkForCpfCnpj(inputVal);
+        }
       }
       return this.maskExpression.replace(/\w/g, this.placeHolderCharacter);
     }
@@ -182,6 +193,13 @@ export class MaskService extends MaskApplierService {
   public checkSpecialCharAmount(mask: string): number {
     const chars: string[] = mask.split('').filter((item: string) => this._findSpecialChar(item));
     return chars.length;
+  }
+
+  public removeMask(inputValue: string): string {
+    return this._removeMask(
+      this._removeSuffix(this._removePrefix(inputValue)),
+      this.maskSpecialCharacters.concat('_').concat(this.placeHolderCharacter)
+    );
   }
 
   private _checkForIp(inputVal: string): string {
@@ -209,6 +227,62 @@ export class MaskService extends MaskApplierService {
     return '';
   }
 
+  private _checkForCpfCnpj(inputVal: string): string {
+    const cpf =
+      `${this.placeHolderCharacter}${this.placeHolderCharacter}${this.placeHolderCharacter}` +
+      `.${this.placeHolderCharacter}${this.placeHolderCharacter}${this.placeHolderCharacter}` +
+      `.${this.placeHolderCharacter}${this.placeHolderCharacter}${this.placeHolderCharacter}` +
+      `-${this.placeHolderCharacter}${this.placeHolderCharacter}`;
+    const cnpj =
+      `${this.placeHolderCharacter}${this.placeHolderCharacter}` +
+      `.${this.placeHolderCharacter}${this.placeHolderCharacter}${this.placeHolderCharacter}` +
+      `.${this.placeHolderCharacter}${this.placeHolderCharacter}${this.placeHolderCharacter}` +
+      `/${this.placeHolderCharacter}${this.placeHolderCharacter}${this.placeHolderCharacter}${this.placeHolderCharacter}` +
+      `-${this.placeHolderCharacter}${this.placeHolderCharacter}`;
+
+    if (inputVal === '#') {
+      return cpf;
+    }
+    const arr: string[] = [];
+    for (let i = 0; i < inputVal.length; i++) {
+      if (inputVal[i].match('\\d')) {
+        arr.push(inputVal[i]);
+      }
+    }
+    if (arr.length <= 3) {
+      return cpf.slice(arr.length, cpf.length);
+    }
+    if (arr.length > 3 && arr.length <= 6) {
+      return cpf.slice(arr.length + 1, cpf.length);
+    }
+    if (arr.length > 6 && arr.length <= 9) {
+      return cpf.slice(arr.length + 2, cpf.length);
+    }
+    if (arr.length > 9 && arr.length < 11) {
+      return cpf.slice(arr.length + 3, cpf.length);
+    }
+    if (arr.length === 11) {
+      return '';
+    }
+    if (arr.length === 12) {
+      if (inputVal.length === 17) {
+        return cnpj.slice(16, cnpj.length);
+      }
+      return cnpj.slice(15, cnpj.length);
+    }
+    if (arr.length > 12 && arr.length <= 14) {
+      return cnpj.slice(arr.length + 4, cnpj.length);
+    }
+    return '';
+  }
+
+  /**
+   * Propogates the input value back to the Angular model by triggering the onChange function. It won't do this if writingValue
+   * is true. If that is true it means we are currently in the writeValue function, which is supposed to only update the actual
+   * DOM element based on the Angular model value. It should be a one way process, i.e. writeValue should not be modifying the Angular
+   * model value too. Therefore, we don't trigger onChange in this scenario.
+   * @param inputValue the current form input value
+   */
   private formControlResult(inputValue: string): void {
     if (Array.isArray(this.dropSpecialCharacters)) {
       this.onChange(this._removeMask(this._removeSuffix(this._removePrefix(inputValue)), this.dropSpecialCharacters));
